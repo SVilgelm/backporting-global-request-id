@@ -1,0 +1,22 @@
+diff --git a/cinder/compute/nova.py b/cinder/compute/nova.py
+index 8f63dc87d..413d831ba 100644
+--- a/cinder/compute/nova.py
++++ b/cinder/compute/nova.py
+@@ -141,6 +141,7 @@ def novaclient(context, admin_endpoint=False, privileged_user=False,
+                            region_name=CONF.os_region_name,
+                            endpoint_type=endpoint_type,
+                            cacert=CONF.nova_ca_certificates_file,
++                           global_request_id=context.global_id,
+                            extensions=nova_extensions)
+
+     if not privileged_user:
+diff --git a/cinder/image/glance.py b/cinder/image/glance.py
+index 3c1aa4ae8..65605aab6 100644
+--- a/cinder/image/glance.py
++++ b/cinder/image/glance.py
+@@ -93,6 +93,7 @@ def _create_glance_client(context, netloc, use_ssl,
+     if CONF.glance_request_timeout is not None:
+         params['timeout'] = CONF.glance_request_timeout
+     endpoint = '%s://%s' % (scheme, netloc)
++    params['global_request_id'] = context.global_id
+     return glanceclient.Client(str(version), endpoint, **params)

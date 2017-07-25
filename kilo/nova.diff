@@ -1,0 +1,40 @@
+diff --git a/nova/context.py b/nova/context.py
+index d93be7d8dd..d93b84817c 100644
+--- a/nova/context.py
++++ b/nova/context.py
+@@ -101,7 +101,8 @@ class RequestContext(context.RequestContext):
+             show_deleted=kwargs.pop('show_deleted', False),
+             request_id=request_id,
+             resource_uuid=kwargs.pop('resource_uuid', None),
+-            overwrite=overwrite)
++            overwrite=overwrite,
++            global_request_id=kwargs.pop('global_request_id', None),)
+         # oslo_context's RequestContext.to_dict() generates this field, we can
+         # safely ignore this as we don't use it.
+         kwargs.pop('user_identity', None)
+[svilgelm@svilgelm-mbp ~/workspace/openstack/nova (kilo)]
+11:22:48$ git adu
+[svilgelm@svilgelm-mbp ~/workspace/openstack/nova (kilo)]
+11:23:06$ git ci
+[kilo 0b25633cab] Global request id
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+[svilgelm@svilgelm-mbp ~/workspace/openstack/nova (kilo)]
+11:23:12$ git st
+On branch kilo
+nothing to commit, working tree clean
+[svilgelm@svilgelm-mbp ~/workspace/openstack/nova (kilo)]
+11:23:15$ git di HEAD^
+diff --git a/nova/context.py b/nova/context.py
+index d93be7d8dd..0a30bf43a1 100644
+--- a/nova/context.py
++++ b/nova/context.py
+@@ -101,7 +101,8 @@ class RequestContext(context.RequestContext):
+             show_deleted=kwargs.pop('show_deleted', False),
+             request_id=request_id,
+             resource_uuid=kwargs.pop('resource_uuid', None),
+-            overwrite=overwrite)
++            overwrite=overwrite,
++            global_request_id=kwargs.pop('global_request_id', None))
+         # oslo_context's RequestContext.to_dict() generates this field, we can
+         # safely ignore this as we don't use it.
+         kwargs.pop('user_identity', None)

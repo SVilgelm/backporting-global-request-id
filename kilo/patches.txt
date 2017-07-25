@@ -1,0 +1,17 @@
+oslo.context:
+    ec7cdc4cc560150673f14c84a326f6a72d43d3e1
+    cce83ad5e12baf2edc0e12c2944c587224e71148
+
+oslo.middleware:
+    9b94bae73c1cf5549a69e7798d175119cc1aaa2e
+    0e3dbba0d9d373fbfa9e28897cd33377e2491d32
+
+python-keystoneclient:
+    based on keystoneauth 0906fb0424dcb1987b9a562b087a6c60559cea7b
+
+nova:
+    39c279e2edc8657a8925fa2126a98f6a85e402a3
+
+cinder:
+    72800e6b22cbdbbfb0c0cf3381075d2325021e3c
+
