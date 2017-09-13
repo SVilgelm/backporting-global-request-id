@@ -12,3 +12,39 @@ index d93be7d8dd..0a30bf43a1 100644
          # oslo_context's RequestContext.to_dict() generates this field, we can
          # safely ignore this as we don't use it.
          kwargs.pop('user_identity', None)
+diff --git a/nova/image/glance.py b/nova/image/glance.py
+index 1352153688..10044ae183 100644
+--- a/nova/image/glance.py
++++ b/nova/image/glance.py
+@@ -119,6 +119,7 @@ def generate_identity_headers(context, status='Confirmed'):
+ def _create_glance_client(context, host, port, use_ssl, version=1):
+     """Instantiate a new glanceclient.Client object."""
+     params = {}
++    params['global_request_id'] = context.global_id
+     if use_ssl:
+         scheme = 'https'
+         # https specific params
+diff --git a/nova/network/neutronv2/api.py b/nova/network/neutronv2/api.py
+index 2f84715a4e..166ef04514 100644
+--- a/nova/network/neutronv2/api.py
++++ b/nova/network/neutronv2/api.py
+@@ -218,7 +218,8 @@ def get_client(context, admin=False):
+     return clientv20.Client(session=_SESSION,
+                             auth=auth_plugin,
+                             endpoint_override=CONF.neutron.url,
+-                            region_name=CONF.neutron.region_name)
++                            region_name=CONF.neutron.region_name,
++                            global_request_id=context.global_id)
+
+
+ class API(base_api.NetworkAPI):
+diff --git a/nova/volume/cinder.py b/nova/volume/cinder.py
+index d581ffe3ca..cd44e4f62d 100644
+--- a/nova/volume/cinder.py
++++ b/nova/volume/cinder.py
+@@ -132,6 +132,7 @@ def cinderclient(context):
+                                 auth=auth,
+                                 endpoint_override=endpoint_override,
+                                 connect_retries=CONF.cinder.http_retries,
++                                global_request_id=context.global_id,
+                                 **service_parameters)
