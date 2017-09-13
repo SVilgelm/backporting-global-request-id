@@ -1,0 +1,48 @@
+diff --git a/cinderclient/client.py b/cinderclient/client.py
+index a436841..578da0b 100644
+--- a/cinderclient/client.py
++++ b/cinderclient/client.py
+@@ -53,6 +53,7 @@ if not hasattr(urlparse, 'parse_qsl'):
+     urlparse.parse_qsl = cgi.parse_qsl
+ 
+ _VALID_VERSIONS = ['v1', 'v2']
++REQ_ID_HEADER = 'X-OpenStack-Request-ID'
+ 
+ 
+ def get_volume_api_from_url(url):
+@@ -77,6 +78,10 @@ class SessionClient(adapter.LegacyJsonAdapter):
+ 
+     def request(self, *args, **kwargs):
+         kwargs.setdefault('authenticated', False)
++
++        if self.global_request_id:
++            kwargs['headers'].setdefault(REQ_ID_HEADER, self.global_request_id)
++
+         return super(SessionClient, self).request(*args, **kwargs)
+ 
+     def _cs_request(self, url, method, **kwargs):
+@@ -145,11 +150,13 @@ class HTTPClient(object):
+                  endpoint_type='publicURL', service_type=None,
+                  service_name=None, volume_service_name=None, retries=None,
+                  http_log_debug=False, cacert=None,
+-                 auth_system='keystone', auth_plugin=None):
++                 auth_system='keystone', auth_plugin=None,
++                 global_request_id=None):
+         self.user = user
+         self.password = password
+         self.projectid = projectid
+         self.tenant_id = tenant_id
++        self.global_request_id = global_request_id
+ 
+         if auth_system and auth_system != 'keystone' and not auth_plugin:
+             raise exceptions.AuthSystemNotFound(auth_system)
+@@ -229,6 +236,9 @@ class HTTPClient(object):
+             kwargs['data'] = json.dumps(kwargs['body'])
+             del kwargs['body']
+ 
++        if self.global_request_id:
++            kwargs['headers'].setdefault(REQ_ID_HEADER, self.global_request_id)
++
+         if self.timeout:
+             kwargs.setdefault('timeout', self.timeout)
+         self.http_log_req((url, method,), kwargs)

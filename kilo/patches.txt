@@ -20,3 +20,6 @@ cinder:
 
 python-neutronclient
     af869a4ca6751d750ae969ac0015d4354d7da2c6
+
+python-cindderclient
+    5075eb268e7518ffe70062a54ac80b01948aafcf
