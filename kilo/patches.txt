@@ -18,3 +18,5 @@ nova:
 cinder:
     72800e6b22cbdbbfb0c0cf3381075d2325021e3c
 
+python-neutronclient
+    af869a4ca6751d750ae969ac0015d4354d7da2c6
