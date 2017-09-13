@@ -23,3 +23,6 @@ python-neutronclient
 
 python-cindderclient
     5075eb268e7518ffe70062a54ac80b01948aafcf
+
+python-glanceclient
+    ec76e254da4f4727463dcb3a76adf33e5d3f7ffb
