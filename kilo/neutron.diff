@@ -1,0 +1,54 @@
+diff --git a/neutron/auth.py b/neutron/auth.py
+index b8c45e2e8..3af33ac53 100644
+--- a/neutron/auth.py
++++ b/neutron/auth.py
+@@ -47,6 +47,7 @@ class NeutronKeystoneContext(wsgi.Middleware):
+ 
+         # Use request_id if already set
+         req_id = req.environ.get(request_id.ENV_REQUEST_ID)
++        global_req_id = req.environ.get(request_id.GLOBAL_REQ_ID)
+ 
+         # Get the auth token
+         auth_token = req.headers.get('X_AUTH_TOKEN',
+@@ -55,7 +56,8 @@ class NeutronKeystoneContext(wsgi.Middleware):
+         # Create a context with the authentication data
+         ctx = context.Context(user_id, tenant_id, roles=roles,
+                               user_name=user_name, tenant_name=tenant_name,
+-                              request_id=req_id, auth_token=auth_token)
++                              request_id=req_id, auth_token=auth_token,
++                              global_request_id=global_req_id)
+ 
+         # Inject the context...
+         req.environ['neutron.context'] = ctx
+diff --git a/neutron/context.py b/neutron/context.py
+index 4e8bdfb25..07e82b198 100644
+--- a/neutron/context.py
++++ b/neutron/context.py
+@@ -38,7 +38,8 @@ class ContextBase(oslo_context.RequestContext):
+     def __init__(self, user_id, tenant_id, is_admin=None, read_deleted="no",
+                  roles=None, timestamp=None, load_admin_roles=True,
+                  request_id=None, tenant_name=None, user_name=None,
+-                 overwrite=True, auth_token=None, **kwargs):
++                 overwrite=True, auth_token=None, global_request_id=None,
++                 **kwargs):
+         """Object initialization.
+ 
+         :param read_deleted: 'no' indicates deleted records are hidden, 'yes'
+@@ -55,7 +56,8 @@ class ContextBase(oslo_context.RequestContext):
+                                           user=user_id, tenant=tenant_id,
+                                           is_admin=is_admin,
+                                           request_id=request_id,
+-                                          overwrite=overwrite)
++                                          overwrite=overwrite,
++                                          global_request_id=global_request_id)
+         self.user_name = user_name
+         self.tenant_name = tenant_name
+ 
+@@ -124,6 +126,7 @@ class ContextBase(oslo_context.RequestContext):
+                 'project_name': self.tenant_name,
+                 'user_name': self.user_name,
+                 'auth_token': self.auth_token,
++                'global_request_id': self.global_request_id,
+                 }
+ 
+     @classmethod
