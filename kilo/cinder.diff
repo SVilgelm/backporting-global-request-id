@@ -8,8 +8,52 @@ index 8f63dc87d..413d831ba 100644
                             cacert=CONF.nova_ca_certificates_file,
 +                           global_request_id=context.global_id,
                             extensions=nova_extensions)
-
+ 
      if not privileged_user:
+diff --git a/cinder/context.py b/cinder/context.py
+index 88139ad61..776a2ab75 100644
+--- a/cinder/context.py
++++ b/cinder/context.py
+@@ -41,7 +41,7 @@ class RequestContext(context.RequestContext):
+                  timestamp=None, request_id=None, auth_token=None,
+                  overwrite=True, quota_class=None, service_catalog=None,
+                  domain=None, user_domain=None, project_domain=None,
+-                 **kwargs):
++                 global_request_id=None, **kwargs):
+         """Initialize RequestContext.
+ 
+         :param read_deleted: 'no' indicates deleted records are hidden, 'yes'
+@@ -55,14 +55,11 @@ class RequestContext(context.RequestContext):
+             because they possibly came in from older rpc messages.
+         """
+ 
+-        super(RequestContext, self).__init__(auth_token=auth_token,
+-                                             user=user_id,
+-                                             tenant=project_id,
+-                                             domain=domain,
+-                                             user_domain=user_domain,
+-                                             project_domain=project_domain,
+-                                             is_admin=is_admin,
+-                                             request_id=request_id)
++        super(RequestContext, self).__init__(
++            auth_token=auth_token, user=user_id, tenant=project_id,
++            domain=domain, user_domain=user_domain,
++            project_domain=project_domain, is_admin=is_admin,
++            request_id=request_id, global_request_id=global_request_id)
+         self.roles = roles or []
+         self.project_name = project_name
+         self.read_deleted = read_deleted
+@@ -118,7 +115,9 @@ class RequestContext(context.RequestContext):
+                  'timestamp': timeutils.strtime(self.timestamp),
+                  'quota_class': self.quota_class,
+                  'service_catalog': self.service_catalog,
+-                 'request_id': self.request_id}
++                 'request_id': self.request_id,
++                 'global_request_id': self.global_request_id,
++                 }
+         return dict(default.items() + extra.items())
+ 
+     @classmethod
 diff --git a/cinder/image/glance.py b/cinder/image/glance.py
 index 3c1aa4ae8..65605aab6 100644
 --- a/cinder/image/glance.py
@@ -20,3 +64,5 @@ index 3c1aa4ae8..65605aab6 100644
      endpoint = '%s://%s' % (scheme, netloc)
 +    params['global_request_id'] = context.global_id
      return glanceclient.Client(str(version), endpoint, **params)
+ 
+ 
