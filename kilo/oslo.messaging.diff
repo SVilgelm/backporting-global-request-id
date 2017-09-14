@@ -1,0 +1,52 @@
+diff --git a/oslo_messaging/openstack/common/context.py b/oslo_messaging/openstack/common/context.py
+index b612db71..aef7f228 100644
+--- a/oslo_messaging/openstack/common/context.py
++++ b/oslo_messaging/openstack/common/context.py
+@@ -41,7 +41,7 @@ class RequestContext(object):
+     def __init__(self, auth_token=None, user=None, tenant=None, domain=None,
+                  user_domain=None, project_domain=None, is_admin=False,
+                  read_only=False, show_deleted=False, request_id=None,
+-                 instance_uuid=None):
++                 instance_uuid=None, global_request_id=None):
+         self.auth_token = auth_token
+         self.user = user
+         self.tenant = tenant
+@@ -54,6 +54,7 @@ class RequestContext(object):
+         self.instance_uuid = instance_uuid
+         if not request_id:
+             request_id = generate_request_id()
++        self.global_request_id = global_request_id
+         self.request_id = request_id
+ 
+     def to_dict(self):
+@@ -74,9 +75,20 @@ class RequestContext(object):
+                 'show_deleted': self.show_deleted,
+                 'auth_token': self.auth_token,
+                 'request_id': self.request_id,
++                'global_request_id': self.global_request_id,
+                 'instance_uuid': self.instance_uuid,
+                 'user_identity': user_idt}
+ 
++    @property
++    def global_id(self):
++        """Return a sensible value for global_id to pass on.
++
++        When we want to make a call with to another service, it's
++        important that we try to use global_request_id if available,
++        and fall back to the locally generated request_id if not.
++        """
++        return self.global_request_id or self.request_id
++
+     @classmethod
+     def from_dict(cls, ctx):
+         return cls(
+@@ -90,7 +102,8 @@ class RequestContext(object):
+             read_only=ctx.get("read_only", False),
+             show_deleted=ctx.get("show_deleted", False),
+             request_id=ctx.get("request_id"),
+-            instance_uuid=ctx.get("instance_uuid"))
++            instance_uuid=ctx.get("instance_uuid"),
++            global_request_id=ctx.get("global_request_id"))
+ 
+ 
+ def get_admin_context(show_deleted=False):
