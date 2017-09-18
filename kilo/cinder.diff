@@ -1,3 +1,25 @@
+diff --git a/cinder/api/middleware/auth.py b/cinder/api/middleware/auth.py
+index 9789e1b14..0c0fba2d0 100644
+--- a/cinder/api/middleware/auth.py
++++ b/cinder/api/middleware/auth.py
+@@ -95,6 +95,7 @@ class CinderKeystoneContext(base_wsgi.Middleware):
+         project_name = req.headers.get('X_TENANT_NAME')
+ 
+         req_id = req.environ.get(request_id.ENV_REQUEST_ID)
++        global_req_id = req.environ.get(request_id.GLOBAL_REQ_ID)
+ 
+         # Get the auth token
+         auth_token = req.headers.get('X_AUTH_TOKEN',
+@@ -121,7 +122,8 @@ class CinderKeystoneContext(base_wsgi.Middleware):
+                                      auth_token=auth_token,
+                                      remote_address=remote_address,
+                                      service_catalog=service_catalog,
+-                                     request_id=req_id)
++                                     request_id=req_id,
++                                     global_request_id=global_req_id)
+ 
+         req.environ['cinder.context'] = ctx
+         return self.application
 diff --git a/cinder/compute/nova.py b/cinder/compute/nova.py
 index 8f63dc87d..413d831ba 100644
 --- a/cinder/compute/nova.py
