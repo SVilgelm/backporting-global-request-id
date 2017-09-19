@@ -1,5 +1,5 @@
 diff --git a/neutronclient/client.py b/neutronclient/client.py
-index 0ab732e..fb0561c 100644
+index 0ab732e..0e15e52 100644
 --- a/neutronclient/client.py
 +++ b/neutronclient/client.py
 @@ -41,6 +41,7 @@ else:
@@ -37,28 +37,7 @@ index 0ab732e..fb0561c 100644
          headers['User-Agent'] = self.USER_AGENT
  
          resp = requests.request(
-@@ -273,6 +278,10 @@ class HTTPClient(object):
- 
- 
- class SessionClient(adapter.Adapter):
-+    def __init__(self, *args, **kwargs):
-+        self.global_request_id = kwargs.pop("global_request_id", None)
-+        super(SessionClient, self).__init__(*args, **kwargs)
-+
- 
-     def request(self, *args, **kwargs):
-         kwargs.setdefault('authenticated', False)
-@@ -283,6 +292,9 @@ class SessionClient(adapter.Adapter):
-         headers = kwargs.setdefault('headers', {})
-         headers.setdefault('Accept', content_type)
- 
-+        if self.global_request_id:
-+            headers.setdefault(REQ_ID_HEADER, self.global_request_id)
-+
-         try:
-             kwargs.setdefault('data', kwargs.pop('body'))
-         except KeyError:
-@@ -361,6 +373,7 @@ def construct_http_client(username=None,
+@@ -361,6 +366,7 @@ def construct_http_client(username=None,
                            ca_cert=None,
                            service_type='network',
                            session=None,
@@ -66,7 +45,7 @@ index 0ab732e..fb0561c 100644
                            **kwargs):
  
      if session:
-@@ -369,6 +382,7 @@ def construct_http_client(username=None,
+@@ -369,6 +375,7 @@ def construct_http_client(username=None,
          return SessionClient(session=session,
                               service_type=service_type,
                               region_name=region_name,
@@ -74,7 +53,7 @@ index 0ab732e..fb0561c 100644
                               **kwargs)
      else:
          # FIXME(bklei): username and password are now optional. Need
-@@ -389,4 +403,5 @@ def construct_http_client(username=None,
+@@ -389,4 +396,5 @@ def construct_http_client(username=None,
                            service_type=service_type,
                            ca_cert=ca_cert,
                            log_credentials=log_credentials,
