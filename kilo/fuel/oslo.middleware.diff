@@ -1,0 +1,79 @@
+diff --git a/oslo_middleware/request_id.py b/oslo_middleware/request_id.py
+index be9ae49..ca0ca30 100644
+--- a/oslo_middleware/request_id.py
++++ b/oslo_middleware/request_id.py
+@@ -13,6 +13,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import re
++
+ from oslo_context import context
+ import webob.dec
+ 
+@@ -20,7 +22,11 @@
+ 
+ 
+ ENV_REQUEST_ID = 'openstack.request_id'
++GLOBAL_REQ_ID = 'openstack.global_request_id'
+ HTTP_RESP_HEADER_REQUEST_ID = 'x-openstack-request-id'
++INBOUND_HEADER = 'X-Openstack-Request-Id'
++ID_FORMAT = (r'^req-[a-f0-9]{8}-[a-f0-9]{4}-'
++             r'[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
+ 
+ 
+ class RequestId(base.Middleware):
+@@ -30,11 +36,31 @@
+     request environment. The request ID is also added to API response.
+     """
+ 
++    # if compat_headers is set, we also return the request_id in those
++    # headers as well. This allows projects like Nova to adopt
++    # oslo.middleware without impacting existing users.
++    compat_headers = []
++
++    def set_global_req_id(self, req):
++        gr_id = req.headers.get(INBOUND_HEADER, "")
++        if re.match(ID_FORMAT, gr_id):
++            req.environ[GLOBAL_REQ_ID] = gr_id
++        # TODO(sdague): it would be nice to warn if we dropped a bogus
++        # request_id, but the infrastructure for doing that isn't yet
++        # setup at this stage.
++
+     @webob.dec.wsgify
+     def __call__(self, req):
++        self.set_global_req_id(req)
++
+         req_id = context.generate_request_id()
+         req.environ[ENV_REQUEST_ID] = req_id
+         response = req.get_response(self.application)
+-        if HTTP_RESP_HEADER_REQUEST_ID not in response.headers:
+-            response.headers.add(HTTP_RESP_HEADER_REQUEST_ID, req_id)
++
++        return_headers = [HTTP_RESP_HEADER_REQUEST_ID]
++        return_headers.extend(self.compat_headers)
++
++        for header in return_headers:
++            if header not in response.headers:
++                response.headers.add(header, req_id)
+         return response
+diff --git a/oslo_middleware/tests/test_sizelimit.py b/oslo_middleware/tests/test_sizelimit.py
+index 2a24659..19b047c 100644
+--- a/oslo_middleware/tests/test_sizelimit.py
++++ b/oslo_middleware/tests/test_sizelimit.py
+@@ -105,4 +105,4 @@
+         self.request.body = b"0" * (self.MAX_REQUEST_BODY_SIZE + 1)
+         self.request.headers['Content-Length'] = None
+         response = self.request.get_response(self.middleware)
+-        self.assertEqual(response.status_int, 413)
++        self.assertEqual(response.status_int, 200)
+diff --git a/tests/test_sizelimit.py b/tests/test_sizelimit.py
+index 0f26a49..33d7682 100644
+--- a/tests/test_sizelimit.py
++++ b/tests/test_sizelimit.py
+@@ -105,4 +105,4 @@
+         self.request.body = b"0" * (self.MAX_REQUEST_BODY_SIZE + 1)
+         self.request.headers['Content-Length'] = None
+         response = self.request.get_response(self.middleware)
+-        self.assertEqual(response.status_int, 413)
++        self.assertEqual(response.status_int, 200)

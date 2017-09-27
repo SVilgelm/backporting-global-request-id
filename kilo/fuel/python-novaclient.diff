@@ -1,0 +1,49 @@
+diff --git a/novaclient/client.py b/novaclient/client.py
+index f79e889..686e4cd 100644
+--- a/novaclient/client.py
++++ b/novaclient/client.py
+@@ -46,6 +46,9 @@
+ from novaclient import utils
+ 
+ 
++REQ_ID_HEADER = 'X-OpenStack-Request-ID'
++
++
+ class TCPKeepAliveAdapter(adapters.HTTPAdapter):
+     """The custom adapter used to set TCP Keep-Alive on all connections."""
+     def init_poolmanager(self, *args, **kwargs):
+@@ -133,12 +136,13 @@
+                  http_log_debug=False, auth_system='keystone',
+                  auth_plugin=None, auth_token=None,
+                  cacert=None, tenant_id=None, user_id=None,
+-                 connection_pool=False):
++                 connection_pool=False, global_request_id=None):
+         self.user = user
+         self.user_id = user_id
+         self.password = password
+         self.projectid = projectid
+         self.tenant_id = tenant_id
++        self.global_request_id = global_request_id
+ 
+         self._connection_pool = (_ClientConnectionPool()
+                                  if connection_pool else None)
+@@ -342,6 +346,9 @@
+         kwargs.setdefault('headers', kwargs.get('headers', {}))
+         kwargs['headers']['User-Agent'] = self.USER_AGENT
+         kwargs['headers']['Accept'] = 'application/json'
++        if self.global_request_id:
++            kwargs['headers'].setdefault(REQ_ID_HEADER, self.global_request_id)
++
+         if 'body' in kwargs:
+             kwargs['headers']['Content-Type'] = 'application/json'
+             kwargs['data'] = json.dumps(kwargs['body'])
+@@ -707,7 +714,8 @@
+                           os_cache=os_cache,
+                           http_log_debug=http_log_debug,
+                           cacert=cacert,
+-                          connection_pool=connection_pool)
++                          connection_pool=connection_pool,
++                          global_request_id=kwargs.get('global_request_id'))
+ 
+ 
+ def get_client_class(version):

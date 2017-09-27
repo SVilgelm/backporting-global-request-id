@@ -1,0 +1,70 @@
+diff --git a/keystoneclient/adapter.py b/keystoneclient/adapter.py
+index 74399da..1aba77c 100644
+--- a/keystoneclient/adapter.py
++++ b/keystoneclient/adapter.py
+@@ -43,13 +43,18 @@
+     :param logger: A logging object to use for requests that pass through this
+                    adapter.
+     :type logger: logging.Logger
++    :param str global_request_id: A global_request_id (in the form of
++                                  ``req-$uuid``) that will be passed on all
++                                  requests. Enables cross project request id
++                                  tracking.
+     """
+ 
+     @utils.positional()
+     def __init__(self, session, service_type=None, service_name=None,
+                  interface=None, region_name=None, endpoint_override=None,
+                  version=None, auth=None, user_agent=None,
+-                 connect_retries=None, logger=None):
++                 connect_retries=None, logger=None,
++                 global_request_id=None):
+         # NOTE(jamielennox): when adding new parameters to adapter please also
+         # add them to the adapter call in httpclient.HTTPClient.__init__
+         self.session = session
+@@ -63,6 +68,7 @@
+         self.auth = auth
+         self.connect_retries = connect_retries
+         self.logger = logger
++        self.global_request_id = global_request_id
+ 
+     def _set_endpoint_filter_kwargs(self, kwargs):
+         if self.service_type:
+@@ -92,6 +98,10 @@
+         if self.logger:
+             kwargs.setdefault('logger', self.logger)
+ 
++        if self.global_request_id is not None:
++            kwargs.setdefault('headers', {}).setdefault(
++                "X-OpenStack-Request-ID", self.global_request_id)
++
+         return self.session.request(url, method, **kwargs)
+ 
+     def get_token(self, auth=None):
+diff --git a/keystoneclient/httpclient.py b/keystoneclient/httpclient.py
+index 3270295..8732e3b 100644
+--- a/keystoneclient/httpclient.py
++++ b/keystoneclient/httpclient.py
+@@ -323,16 +323,12 @@
+         # NOTE(jamielennox): unfortunately we can't just use **kwargs here as
+         # it would incompatibly limit the kwargs that can be passed to __init__
+         # try and keep this list in sync with adapter.Adapter.__init__
+-        self._adapter = _KeystoneAdapter(session,
+-                                         service_type='identity',
+-                                         service_name=service_name,
+-                                         interface=interface,
+-                                         region_name=region_name,
+-                                         endpoint_override=endpoint_override,
+-                                         version=self.version,
+-                                         auth=auth,
+-                                         user_agent=user_agent,
+-                                         connect_retries=connect_retries)
++        self._adapter = _KeystoneAdapter(
++            session, service_type='identity', service_name=service_name,
++            interface=interface, region_name=region_name,
++            endpoint_override=endpoint_override, version=self.version,
++            auth=auth, user_agent=user_agent, connect_retries=connect_retries,
++            global_request_id=kwargs.get('global_request_id'))
+ 
+         # keyring setup
+         if use_keyring and keyring is None:

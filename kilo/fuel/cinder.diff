@@ -1,0 +1,89 @@
+diff --git a/cinder/api/middleware/auth.py b/cinder/api/middleware/auth.py
+index 9789e1b..0c0fba2 100644
+--- a/cinder/api/middleware/auth.py
++++ b/cinder/api/middleware/auth.py
+@@ -95,6 +95,7 @@
+         project_name = req.headers.get('X_TENANT_NAME')
+ 
+         req_id = req.environ.get(request_id.ENV_REQUEST_ID)
++        global_req_id = req.environ.get(request_id.GLOBAL_REQ_ID)
+ 
+         # Get the auth token
+         auth_token = req.headers.get('X_AUTH_TOKEN',
+@@ -121,7 +122,8 @@
+                                      auth_token=auth_token,
+                                      remote_address=remote_address,
+                                      service_catalog=service_catalog,
+-                                     request_id=req_id)
++                                     request_id=req_id,
++                                     global_request_id=global_req_id)
+ 
+         req.environ['cinder.context'] = ctx
+         return self.application
+diff --git a/cinder/compute/nova.py b/cinder/compute/nova.py
+index 8f63dc8..413d831 100644
+--- a/cinder/compute/nova.py
++++ b/cinder/compute/nova.py
+@@ -141,6 +141,7 @@
+                            region_name=CONF.os_region_name,
+                            endpoint_type=endpoint_type,
+                            cacert=CONF.nova_ca_certificates_file,
++                           global_request_id=context.global_id,
+                            extensions=nova_extensions)
+ 
+     if not privileged_user:
+diff --git a/cinder/context.py b/cinder/context.py
+index 88139ad..776a2ab 100644
+--- a/cinder/context.py
++++ b/cinder/context.py
+@@ -41,7 +41,7 @@
+                  timestamp=None, request_id=None, auth_token=None,
+                  overwrite=True, quota_class=None, service_catalog=None,
+                  domain=None, user_domain=None, project_domain=None,
+-                 **kwargs):
++                 global_request_id=None, **kwargs):
+         """Initialize RequestContext.
+ 
+         :param read_deleted: 'no' indicates deleted records are hidden, 'yes'
+@@ -55,14 +55,11 @@
+             because they possibly came in from older rpc messages.
+         """
+ 
+-        super(RequestContext, self).__init__(auth_token=auth_token,
+-                                             user=user_id,
+-                                             tenant=project_id,
+-                                             domain=domain,
+-                                             user_domain=user_domain,
+-                                             project_domain=project_domain,
+-                                             is_admin=is_admin,
+-                                             request_id=request_id)
++        super(RequestContext, self).__init__(
++            auth_token=auth_token, user=user_id, tenant=project_id,
++            domain=domain, user_domain=user_domain,
++            project_domain=project_domain, is_admin=is_admin,
++            request_id=request_id, global_request_id=global_request_id)
+         self.roles = roles or []
+         self.project_name = project_name
+         self.read_deleted = read_deleted
+@@ -118,7 +115,9 @@
+                  'timestamp': timeutils.strtime(self.timestamp),
+                  'quota_class': self.quota_class,
+                  'service_catalog': self.service_catalog,
+-                 'request_id': self.request_id}
++                 'request_id': self.request_id,
++                 'global_request_id': self.global_request_id,
++                 }
+         return dict(default.items() + extra.items())
+ 
+     @classmethod
+diff --git a/cinder/image/glance.py b/cinder/image/glance.py
+index bf137c0..7e0eebc 100644
+--- a/cinder/image/glance.py
++++ b/cinder/image/glance.py
+@@ -93,6 +93,7 @@
+     if CONF.glance_request_timeout is not None:
+         params['timeout'] = CONF.glance_request_timeout
+     endpoint = '%s://%s' % (scheme, netloc)
++    params['global_request_id'] = context.global_id
+     return glanceclient.Client(str(version), endpoint, **params)
+ 

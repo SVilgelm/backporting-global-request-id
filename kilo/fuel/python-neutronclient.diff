@@ -1,0 +1,62 @@
+diff --git a/neutronclient/client.py b/neutronclient/client.py
+index 0ab732e..0e15e52 100644
+--- a/neutronclient/client.py
++++ b/neutronclient/client.py
+@@ -41,6 +41,7 @@
+ 
+ logging.getLogger("requests").setLevel(_requests_log_level)
+ MAX_URI_LEN = 8192
++REQ_ID_HEADER = 'X-OpenStack-Request-ID'
+ 
+ 
+ class HTTPClient(object):
+@@ -56,7 +57,7 @@
+                  endpoint_url=None, insecure=False,
+                  endpoint_type='publicURL',
+                  auth_strategy='keystone', ca_cert=None, log_credentials=False,
+-                 service_type='network',
++                 service_type='network', global_request_id=None,
+                  **kwargs):
+ 
+         self.username = username
+@@ -75,6 +76,7 @@
+         self.endpoint_url = endpoint_url
+         self.auth_strategy = auth_strategy
+         self.log_credentials = log_credentials
++        self.global_request_id = global_request_id
+         if insecure:
+             self.verify_cert = False
+         else:
+@@ -133,6 +135,9 @@
+ 
+         if body:
+             headers.setdefault('Content-Type', content_type)
++
++        if self.global_request_id:
++            headers.setdefault(REQ_ID_HEADER, self.global_request_id)
+ 
+         headers['User-Agent'] = self.USER_AGENT
+ 
+@@ -361,6 +366,7 @@
+                           ca_cert=None,
+                           service_type='network',
+                           session=None,
++                          global_request_id=None,
+                           **kwargs):
+ 
+     if session:
+@@ -369,6 +375,7 @@
+         return SessionClient(session=session,
+                              service_type=service_type,
+                              region_name=region_name,
++                             global_request_id=global_request_id,
+                              **kwargs)
+     else:
+         # FIXME(bklei): username and password are now optional. Need
+@@ -389,4 +396,5 @@
+                           service_type=service_type,
+                           ca_cert=ca_cert,
+                           log_credentials=log_credentials,
+-                          auth_strategy=auth_strategy)
++                          auth_strategy=auth_strategy,
++                          global_request_id=global_request_id)
