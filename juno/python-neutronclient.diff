@@ -1,0 +1,46 @@
+diff --git a/neutronclient/client.py b/neutronclient/client.py
+index 0a68ff0..b2dcc0f 100644
+--- a/neutronclient/client.py
++++ b/neutronclient/client.py
+@@ -41,6 +41,8 @@ else:
+ 
+ logging.getLogger("requests").setLevel(_requests_log_level)
+ 
++REQ_ID_HEADER = 'X-OpenStack-Request-ID'
++
+ 
+ class HTTPClient(object):
+     """Handles the REST calls and responses, include authn."""
+@@ -58,7 +60,7 @@ class HTTPClient(object):
+                  endpoint_url=None, insecure=False,
+                  endpoint_type='publicURL',
+                  auth_strategy='keystone', ca_cert=None, log_credentials=False,
+-                 service_type='network',
++                 service_type='network', global_request_id=None,
+                  **kwargs):
+ 
+         self.username = username
+@@ -77,6 +79,7 @@ class HTTPClient(object):
+         self.endpoint_url = endpoint_url
+         self.auth_strategy = auth_strategy
+         self.log_credentials = log_credentials
++        self.global_request_id = global_request_id
+         if insecure:
+             self.verify_cert = False
+         else:
+@@ -132,6 +135,8 @@ class HTTPClient(object):
+         content_type = kwargs.pop('content_type', None) or 'application/json'
+         headers = headers or {}
+         headers.setdefault('Accept', content_type)
++        if self.global_request_id:
++            headers.setdefault(REQ_ID_HEADER, self.global_request_id)
+ 
+         if body:
+             headers.setdefault('Content-Type', content_type)
+@@ -384,4 +389,5 @@ def construct_http_client(username=None,
+                           service_type=service_type,
+                           ca_cert=ca_cert,
+                           log_credentials=log_credentials,
+-                          auth_strategy=auth_strategy)
++                          auth_strategy=auth_strategy,
++                          global_request_id=kwargs.get('global_request_id'))

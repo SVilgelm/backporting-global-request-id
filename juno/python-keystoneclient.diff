@@ -1,0 +1,58 @@
+diff --git a/keystoneclient/adapter.py b/keystoneclient/adapter.py
+index e14ce7d..09d5d15 100644
+--- a/keystoneclient/adapter.py
++++ b/keystoneclient/adapter.py
+@@ -46,7 +46,7 @@ class Adapter(object):
+     def __init__(self, session, service_type=None, service_name=None,
+                  interface=None, region_name=None, endpoint_override=None,
+                  version=None, auth=None, user_agent=None,
+-                 connect_retries=None):
++                 connect_retries=None, global_request_id=None):
+         # NOTE(jamielennox): when adding new parameters to adapter please also
+         # add them to the adapter call in httpclient.HTTPClient.__init__
+         self.session = session
+@@ -59,6 +59,7 @@ class Adapter(object):
+         self.user_agent = user_agent
+         self.auth = auth
+         self.connect_retries = connect_retries
++        self.global_request_id = global_request_id
+ 
+     def _set_endpoint_filter_kwargs(self, kwargs):
+         if self.service_type:
+@@ -71,6 +72,9 @@ class Adapter(object):
+             kwargs.setdefault('region_name', self.region_name)
+         if self.version:
+             kwargs.setdefault('version', self.version)
++        if self.global_request_id is not None:
++            kwargs.setdefault('headers', {}).setdefault(
++                "X-OpenStack-Request-ID", self.global_request_id)
+ 
+     def request(self, url, method, **kwargs):
+         endpoint_filter = kwargs.setdefault('endpoint_filter', {})
+diff --git a/keystoneclient/httpclient.py b/keystoneclient/httpclient.py
+index 84b314e..dbb41de 100644
+--- a/keystoneclient/httpclient.py
++++ b/keystoneclient/httpclient.py
+@@ -323,16 +323,12 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
+         # NOTE(jamielennox): unfortunately we can't just use **kwargs here as
+         # it would incompatibly limit the kwargs that can be passed to __init__
+         # try and keep this list in sync with adapter.Adapter.__init__
+-        self._adapter = _KeystoneAdapter(session,
+-                                         service_type='identity',
+-                                         service_name=service_name,
+-                                         interface=interface,
+-                                         region_name=region_name,
+-                                         endpoint_override=endpoint_override,
+-                                         version=self.version,
+-                                         auth=auth,
+-                                         user_agent=user_agent,
+-                                         connect_retries=connect_retries)
++        self._adapter = _KeystoneAdapter(
++            session, service_type='identity', service_name=service_name,
++            interface=interface, region_name=region_name,
++            endpoint_override=endpoint_override, version=self.version,
++            auth=auth, user_agent=user_agent, connect_retries=connect_retries,
++            global_request_id=kwargs.get('global_request_id'))
+ 
+         # keyring setup
+         if use_keyring and keyring is None:

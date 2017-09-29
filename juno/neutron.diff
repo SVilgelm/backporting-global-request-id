@@ -1,0 +1,157 @@
+diff --git a/neutron/auth.py b/neutron/auth.py
+index a91ab6d31..990b2fbbb 100644
+--- a/neutron/auth.py
++++ b/neutron/auth.py
+@@ -47,6 +47,7 @@ class NeutronKeystoneContext(wsgi.Middleware):
+ 
+         # Use request_id if already set
+         req_id = req.environ.get(request_id.ENV_REQUEST_ID)
++        global_req_id = req.environ.get(request_id.GLOBAL_REQ_ID)
+ 
+         # Get the auth token
+         auth_token = req.headers.get('X_AUTH_TOKEN',
+@@ -55,7 +56,8 @@ class NeutronKeystoneContext(wsgi.Middleware):
+         # Create a context with the authentication data
+         ctx = context.Context(user_id, tenant_id, roles=roles,
+                               user_name=user_name, tenant_name=tenant_name,
+-                              request_id=req_id, auth_token=auth_token)
++                              request_id=req_id, auth_token=auth_token,
++                              global_request_id=global_req_id)
+ 
+         # Inject the context...
+         req.environ['neutron.context'] = ctx
+diff --git a/neutron/context.py b/neutron/context.py
+index 1da9b7742..34fec5e60 100644
+--- a/neutron/context.py
++++ b/neutron/context.py
+@@ -39,7 +39,8 @@ class ContextBase(common_context.RequestContext):
+     def __init__(self, user_id, tenant_id, is_admin=None, read_deleted="no",
+                  roles=None, timestamp=None, load_admin_roles=True,
+                  request_id=None, tenant_name=None, user_name=None,
+-                 overwrite=True, auth_token=None, **kwargs):
++                 overwrite=True, auth_token=None, global_request_id=None,
++                 **kwargs):
+         """Object initialization.
+ 
+         :param read_deleted: 'no' indicates deleted records are hidden, 'yes'
+@@ -55,7 +56,8 @@ class ContextBase(common_context.RequestContext):
+         super(ContextBase, self).__init__(auth_token=auth_token,
+                                           user=user_id, tenant=tenant_id,
+                                           is_admin=is_admin,
+-                                          request_id=request_id)
++                                          request_id=request_id,
++                                          global_request_id=global_request_id)
+         self.user_name = user_name
+         self.tenant_name = tenant_name
+ 
+@@ -126,6 +128,7 @@ class ContextBase(common_context.RequestContext):
+                 'roles': self.roles,
+                 'timestamp': str(self.timestamp),
+                 'request_id': self.request_id,
++                'global_request_id': self.global_request_id,
+                 'tenant': self.tenant,
+                 'user': self.user,
+                 'tenant_name': self.tenant_name,
+diff --git a/neutron/openstack/common/context.py b/neutron/openstack/common/context.py
+index fa62fc1f1..bf2c362d9 100644
+--- a/neutron/openstack/common/context.py
++++ b/neutron/openstack/common/context.py
+@@ -40,7 +40,8 @@ class RequestContext(object):
+     """
+ 
+     def __init__(self, auth_token=None, user=None, tenant=None, is_admin=False,
+-                 read_only=False, show_deleted=False, request_id=None):
++                 read_only=False, show_deleted=False, request_id=None,
++                 global_request_id=None):
+         self.auth_token = auth_token
+         self.user = user
+         self.tenant = tenant
+@@ -50,6 +51,17 @@ class RequestContext(object):
+         if not request_id:
+             request_id = generate_request_id()
+         self.request_id = request_id
++        self.global_request_id = global_request_id
++
++    @property
++    def global_id(self):
++        """Return a sensible value for global_id to pass on.
++
++        When we want to make a call with to another service, it's
++        important that we try to use global_request_id if available,
++        and fall back to the locally generated request_id if not.
++        """
++        return self.global_request_id or self.request_id
+ 
+     def to_dict(self):
+         return {'user': self.user,
+@@ -58,7 +70,8 @@ class RequestContext(object):
+                 'read_only': self.read_only,
+                 'show_deleted': self.show_deleted,
+                 'auth_token': self.auth_token,
+-                'request_id': self.request_id}
++                'request_id': self.request_id,
++                'global_request_id': self.global_request_id}
+ 
+ 
+ def get_admin_context(show_deleted="no"):
+diff --git a/neutron/openstack/common/middleware/request_id.py b/neutron/openstack/common/middleware/request_id.py
+index 5c2620cce..77f8e964d 100644
+--- a/neutron/openstack/common/middleware/request_id.py
++++ b/neutron/openstack/common/middleware/request_id.py
+@@ -19,6 +19,8 @@ It ensures to assign request ID for each API request and set it to
+ request environment. The request ID is also added to API response.
+ """
+ 
++import re
++
+ import webob.dec
+ 
+ from neutron.openstack.common import context
+@@ -26,16 +28,45 @@ from neutron.openstack.common.middleware import base
+ 
+ 
+ ENV_REQUEST_ID = 'openstack.request_id'
++GLOBAL_REQ_ID = 'openstack.global_request_id'
+ HTTP_RESP_HEADER_REQUEST_ID = 'x-openstack-request-id'
++INBOUND_HEADER = 'X-Openstack-Request-Id'
++ID_FORMAT = (r'^req-[a-f0-9]{8}-[a-f0-9]{4}-'
++             r'[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
+ 
+ 
+ class RequestIdMiddleware(base.Middleware):
++    """Middleware that ensures request ID.
++
++    It ensures to assign request ID for each API request and set it to
++    request environment. The request ID is also added to API response.
++    """
++
++    # if compat_headers is set, we also return the request_id in those
++    # headers as well. This allows projects like Nova to adopt
++    # oslo.middleware without impacting existing users.
++    compat_headers = []
++
++    def set_global_req_id(self, req):
++        gr_id = req.headers.get(INBOUND_HEADER, "")
++        if re.match(ID_FORMAT, gr_id):
++            req.environ[GLOBAL_REQ_ID] = gr_id
++            # TODO(sdague): it would be nice to warn if we dropped a bogus
++            # request_id, but the infrastructure for doing that isn't yet
++            # setup at this stage.
+ 
+     @webob.dec.wsgify
+     def __call__(self, req):
++        self.set_global_req_id(req)
++
+         req_id = context.generate_request_id()
+         req.environ[ENV_REQUEST_ID] = req_id
+         response = req.get_response(self.application)
+-        if HTTP_RESP_HEADER_REQUEST_ID not in response.headers:
+-            response.headers.add(HTTP_RESP_HEADER_REQUEST_ID, req_id)
++
++        return_headers = [HTTP_RESP_HEADER_REQUEST_ID]
++        return_headers.extend(self.compat_headers)
++
++        for header in return_headers:
++            if header not in response.headers:
++                response.headers.add(header, req_id)
+         return response

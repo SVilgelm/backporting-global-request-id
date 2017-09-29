@@ -1,0 +1,233 @@
+diff --git a/nova/api/auth.py b/nova/api/auth.py
+index 43b4dbef88..295e141b44 100644
+--- a/nova/api/auth.py
++++ b/nova/api/auth.py
+@@ -120,6 +120,7 @@ class NovaKeystoneContext(wsgi.Middleware):
+         user_name = req.headers.get('X_USER_NAME')
+ 
+         req_id = req.environ.get(request_id.ENV_REQUEST_ID)
++        global_req_id = req.environ.get(request_id.GLOBAL_REQ_ID)
+ 
+         # Get the auth token
+         auth_token = req.headers.get('X_AUTH_TOKEN',
+@@ -147,7 +148,8 @@ class NovaKeystoneContext(wsgi.Middleware):
+                                      auth_token=auth_token,
+                                      remote_address=remote_address,
+                                      service_catalog=service_catalog,
+-                                     request_id=req_id)
++                                     request_id=req_id,
++                                     global_request_id=global_req_id)
+ 
+         req.environ['nova.context'] = ctx
+         return self.application
+diff --git a/nova/context.py b/nova/context.py
+index 818791458a..d3a5b4c8a4 100644
+--- a/nova/context.py
++++ b/nova/context.py
+@@ -48,7 +48,8 @@ class RequestContext(object):
+                  roles=None, remote_address=None, timestamp=None,
+                  request_id=None, auth_token=None, overwrite=True,
+                  quota_class=None, user_name=None, project_name=None,
+-                 service_catalog=None, instance_lock_checked=False, **kwargs):
++                 service_catalog=None, instance_lock_checked=False,
++                 global_request_id=None, **kwargs):
+         """:param read_deleted: 'no' indicates deleted records are hidden,
+                 'yes' indicates deleted records are visible,
+                 'only' indicates that *only* deleted records are visible.
+@@ -77,6 +78,7 @@ class RequestContext(object):
+         if not request_id:
+             request_id = generate_request_id()
+         self.request_id = request_id
++        self.global_request_id = global_request_id
+         self.auth_token = auth_token
+ 
+         if service_catalog:
+@@ -101,6 +103,16 @@ class RequestContext(object):
+         if overwrite or not hasattr(local.store, 'context'):
+             self.update_store()
+ 
++    @property
++    def global_id(self):
++        """Return a sensible value for global_id to pass on.
++
++        When we want to make a call with to another service, it's
++        important that we try to use global_request_id if available,
++        and fall back to the locally generated request_id if not.
++        """
++        return self.global_request_id or self.request_id
++
+     def _get_read_deleted(self):
+         return self._read_deleted
+ 
+@@ -128,6 +140,7 @@ class RequestContext(object):
+                 'remote_address': self.remote_address,
+                 'timestamp': timeutils.strtime(self.timestamp),
+                 'request_id': self.request_id,
++                'global_request_id': self.global_request_id,
+                 'auth_token': self.auth_token,
+                 'quota_class': self.quota_class,
+                 'user_name': self.user_name,
+diff --git a/nova/image/glance.py b/nova/image/glance.py
+index 773cc8fe77..78034299c4 100644
+--- a/nova/image/glance.py
++++ b/nova/image/glance.py
+@@ -132,6 +132,7 @@ def generate_identity_headers(context, status='Confirmed'):
+ def _create_glance_client(context, host, port, use_ssl, version=1):
+     """Instantiate a new glanceclient.Client object."""
+     params = {}
++    params['global_request_id'] = context.global_id
+     if use_ssl:
+         scheme = 'https'
+         # https specific params
+diff --git a/nova/network/neutronv2/__init__.py b/nova/network/neutronv2/__init__.py
+index e442ae8e44..88954d063a 100644
+--- a/nova/network/neutronv2/__init__.py
++++ b/nova/network/neutronv2/__init__.py
+@@ -38,7 +38,7 @@ class AdminTokenStore(object):
+         return cls._instance
+ 
+ 
+-def _get_client(token=None, admin=False):
++def _get_client(token=None, admin=False, global_request_id=None):
+     params = {
+         'endpoint_url': CONF.neutron.url,
+         'timeout': CONF.neutron.url_timeout,
+@@ -46,6 +46,7 @@ def _get_client(token=None, admin=False):
+         'ca_cert': CONF.neutron.ca_certificates_file,
+         'auth_strategy': CONF.neutron.auth_strategy,
+         'token': token,
++        'global_request_id': global_request_id
+     }
+ 
+     if admin:
+@@ -103,13 +104,14 @@ def get_client(context, admin=False):
+     if admin or (context.is_admin and not context.auth_token):
+         with lockutils.lock('neutron_admin_auth_token_lock'):
+             orig_token = AdminTokenStore.get().admin_auth_token
+-        client = _get_client(orig_token, admin=True)
++        client = _get_client(orig_token, admin=True,
++                             global_request_id=context.global_id)
+         return ClientWrapper(client)
+ 
+     # We got a user token that we can use that as-is
+     if context.auth_token:
+         token = context.auth_token
+-        return _get_client(token=token)
++        return _get_client(token=token, global_request_id=context.global_id)
+ 
+     # We did not get a user token and we should not be using
+     # an admin token so log an error
+diff --git a/nova/openstack/common/context.py b/nova/openstack/common/context.py
+index b612db7140..485ec73fa5 100644
+--- a/nova/openstack/common/context.py
++++ b/nova/openstack/common/context.py
+@@ -41,7 +41,7 @@ class RequestContext(object):
+     def __init__(self, auth_token=None, user=None, tenant=None, domain=None,
+                  user_domain=None, project_domain=None, is_admin=False,
+                  read_only=False, show_deleted=False, request_id=None,
+-                 instance_uuid=None):
++                 instance_uuid=None, global_request_id=None):
+         self.auth_token = auth_token
+         self.user = user
+         self.tenant = tenant
+@@ -55,6 +55,7 @@ class RequestContext(object):
+         if not request_id:
+             request_id = generate_request_id()
+         self.request_id = request_id
++        self.global_request_id = global_request_id
+ 
+     def to_dict(self):
+         user_idt = (
+@@ -74,6 +75,7 @@ class RequestContext(object):
+                 'show_deleted': self.show_deleted,
+                 'auth_token': self.auth_token,
+                 'request_id': self.request_id,
++                'global_request_id': self.global_request_id,
+                 'instance_uuid': self.instance_uuid,
+                 'user_identity': user_idt}
+ 
+@@ -90,7 +92,8 @@ class RequestContext(object):
+             read_only=ctx.get("read_only", False),
+             show_deleted=ctx.get("show_deleted", False),
+             request_id=ctx.get("request_id"),
+-            instance_uuid=ctx.get("instance_uuid"))
++            instance_uuid=ctx.get("instance_uuid"),
++            global_request_id=ctx.get("global_request_id"))
+ 
+ 
+ def get_admin_context(show_deleted=False):
+diff --git a/nova/openstack/common/middleware/request_id.py b/nova/openstack/common/middleware/request_id.py
+index c9b4be4f1f..4d43a895ac 100644
+--- a/nova/openstack/common/middleware/request_id.py
++++ b/nova/openstack/common/middleware/request_id.py
+@@ -19,6 +19,8 @@ It ensures to assign request ID for each API request and set it to
+ request environment. The request ID is also added to API response.
+ """
+ 
++import re
++
+ import webob.dec
+ 
+ from nova.openstack.common import context
+@@ -26,16 +28,45 @@ from nova.openstack.common.middleware import base
+ 
+ 
+ ENV_REQUEST_ID = 'openstack.request_id'
++GLOBAL_REQ_ID = 'openstack.global_request_id'
+ HTTP_RESP_HEADER_REQUEST_ID = 'x-openstack-request-id'
++INBOUND_HEADER = 'X-Openstack-Request-Id'
++ID_FORMAT = (r'^req-[a-f0-9]{8}-[a-f0-9]{4}-'
++             r'[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
+ 
+ 
+ class RequestIdMiddleware(base.Middleware):
++    """Middleware that ensures request ID.
++
++    It ensures to assign request ID for each API request and set it to
++    request environment. The request ID is also added to API response.
++    """
++
++    # if compat_headers is set, we also return the request_id in those
++    # headers as well. This allows projects like Nova to adopt
++    # oslo.middleware without impacting existing users.
++    compat_headers = []
++
++    def set_global_req_id(self, req):
++        gr_id = req.headers.get(INBOUND_HEADER, "")
++        if re.match(ID_FORMAT, gr_id):
++            req.environ[GLOBAL_REQ_ID] = gr_id
++            # TODO(sdague): it would be nice to warn if we dropped a bogus
++            # request_id, but the infrastructure for doing that isn't yet
++            # setup at this stage.
+ 
+     @webob.dec.wsgify
+     def __call__(self, req):
++        self.set_global_req_id(req)
++
+         req_id = context.generate_request_id()
+         req.environ[ENV_REQUEST_ID] = req_id
+         response = req.get_response(self.application)
+-        if HTTP_RESP_HEADER_REQUEST_ID not in response.headers:
+-            response.headers.add(HTTP_RESP_HEADER_REQUEST_ID, req_id)
++
++        return_headers = [HTTP_RESP_HEADER_REQUEST_ID]
++        return_headers.extend(self.compat_headers)
++
++        for header in return_headers:
++            if header not in response.headers:
++                response.headers.add(header, req_id)
+         return response
+diff --git a/nova/volume/cinder.py b/nova/volume/cinder.py
+index 2070fa21b1..506b4906fb 100644
+--- a/nova/volume/cinder.py
++++ b/nova/volume/cinder.py
+@@ -98,7 +98,8 @@ def cinderclient(context):
+                              insecure=CONF.cinder.api_insecure,
+                              retries=CONF.cinder.http_retries,
+                              timeout=CONF.cinder.http_timeout,
+-                             cacert=CONF.cinder.ca_certificates_file)
++                             cacert=CONF.cinder.ca_certificates_file,
++                             global_request_id=context.global_id,)
+     # noauth extracts user_id:project_id from auth_token
+     c.client.auth_token = context.auth_token or '%s:%s' % (context.user_id,
+                                                            context.project_id)
