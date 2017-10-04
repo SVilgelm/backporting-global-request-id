@@ -1,0 +1,83 @@
+diff --git a/neutronclient/client.py b/neutronclient/client.py
+index d2f3685..af968ba 100644
+--- a/neutronclient/client.py
++++ b/neutronclient/client.py
+@@ -43,6 +43,8 @@ else:
+ 
+ logging.getLogger("requests").setLevel(_requests_log_level)
+ 
++REQ_ID_HEADER = 'X-OpenStack-Request-ID'
++
+ 
+ @six.add_metaclass(abc.ABCMeta)
+ class AbstractHTTPClient(object):
+@@ -57,6 +59,8 @@ class AbstractHTTPClient(object):
+         headers = headers or {}
+         content_type = content_type or self.CONTENT_TYPE
+         headers.setdefault('Accept', content_type)
++        if self.global_request_id:
++            headers.setdefault(REQ_ID_HEADER, self.global_request_id)
+         if body:
+             headers.setdefault('Content-Type', content_type)
+ 
+@@ -81,7 +85,7 @@ class HTTPClient(AbstractHTTPClient):
+                  endpoint_url=None, insecure=False,
+                  endpoint_type='publicURL',
+                  auth_strategy='keystone', ca_cert=None, log_credentials=False,
+-                 service_type='network',
++                 service_type='network', global_request_id=None,
+                  **kwargs):
+ 
+         self.username = username
+@@ -100,6 +104,7 @@ class HTTPClient(AbstractHTTPClient):
+         self.endpoint_url = endpoint_url
+         self.auth_strategy = auth_strategy
+         self.log_credentials = log_credentials
++        self.global_request_id = global_request_id
+         if insecure:
+             self.verify_cert = False
+         else:
+@@ -289,7 +294,8 @@ class SessionClient(AbstractHTTPClient):
+                  auth,
+                  interface=None,
+                  service_type=None,
+-                 region_name=None):
++                 region_name=None,
++                 global_request_id=None):
+ 
+         self.session = session
+         self.auth = auth
+@@ -298,6 +304,7 @@ class SessionClient(AbstractHTTPClient):
+         self.region_name = region_name
+         self.auth_token = None
+         self.endpoint_url = None
++        self.global_request_id = global_request_id
+ 
+     def _request(self, url, method, body=None, headers=None, **kwargs):
+         kwargs.setdefault('user_agent', self.USER_AGENT)
+@@ -368,14 +375,16 @@ def construct_http_client(username=None,
+                           ca_cert=None,
+                           service_type='network',
+                           session=None,
+-                          auth=None):
++                          auth=None,
++                          global_request_id=None):
+ 
+     if session:
+         return SessionClient(session=session,
+                              auth=auth,
+                              interface=endpoint_type,
+                              service_type=service_type,
+-                             region_name=region_name)
++                             region_name=region_name,
++                             global_request_id=global_request_id)
+     else:
+         # FIXME(bklei): username and password are now optional. Need
+         # to test that they were provided in this mode.  Should also
+@@ -395,4 +404,5 @@ def construct_http_client(username=None,
+                           service_type=service_type,
+                           ca_cert=ca_cert,
+                           log_credentials=log_credentials,
+-                          auth_strategy=auth_strategy)
++                          auth_strategy=auth_strategy,
++                          global_request_id=global_request_id)
